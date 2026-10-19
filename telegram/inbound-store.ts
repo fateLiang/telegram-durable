@@ -135,3 +135,13 @@ export function prune(stateDir: string, days = 7, now = Date.now()): number {
   }
   return n
 }
+
+/**
+ * 把一段文字截到 n 字放進 <channel> 屬性；有截到就另設 `${key}_truncated`＝原長度。
+ * #401：原本三處（quote_text 1024、reply_to_text 500、caption 500）都是靜默截斷 ⇒
+ * 讀的人分不出「他只選了這麼多」與「後面被我們切掉了」，拿它去比對原文時會以為原文就這麼短。
+ */
+export function capInto(meta: Record<string, string>, key: string, s: string, n: number, clean: (s: string) => string | undefined): void {
+  meta[key] = clean(s.slice(0, n)) ?? ''
+  if (s.length > n) meta[`${key}_truncated`] = String(s.length)
+}

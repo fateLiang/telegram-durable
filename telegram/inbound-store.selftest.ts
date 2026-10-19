@@ -7,7 +7,7 @@
 import { mkdtempSync, rmSync, writeFileSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { recordInbound, markSurfaced, listUnsurfaced, replayMeta, prune, storeDir, type StoredInbound } from './inbound-store'
+import { recordInbound, markSurfaced, listUnsurfaced, replayMeta, prune, storeDir, capInto, type StoredInbound } from './inbound-store'
 
 let pass = 0, fail = 0
 const ok = (name: string, got: unknown, want: unknown) => {
@@ -64,6 +64,23 @@ try {
   ok('不可寫的路徑回 null 而不是 throw', recordInbound('/proc/nonexistent-xyz', mk()), null)
   ok('markSurfaced(null) 不 throw', (markSurfaced(D, null), true), true)
 } finally { rmSync(D, { recursive: true, force: true }) }
+
+console.log('— 截斷要留旗標（#401）—')
+{
+  const clean = (x: string) => x.replace(/[<>]/g, '_')
+  const m: Record<string, string> = {}
+  capInto(m, 'quote_text', 'x'.repeat(1030), 1024, clean)
+  ok('超過上限：留前 1024 字', m.quote_text.length, 1024)
+  ok('超過上限：旗標記原長度', m.quote_text_truncated, '1030')
+  const m2: Record<string, string> = {}
+  capInto(m2, 'reply_to_text', 'a<b', 500, clean)
+  ok('沒超過：照樣清理', m2.reply_to_text, 'a_b')
+  ok('沒超過：不設旗標', 'reply_to_text_truncated' in m2, false)
+  const m3: Record<string, string> = {}
+  capInto(m3, 'k', 'y'.repeat(500), 500, clean)
+  ok('剛好等於上限：不設旗標', 'k_truncated' in m3, false)
+}
+
 
 console.log(`\n${fail ? '🔴 FAIL' : '✅ ALL PASS'}  ${pass} passed, ${fail} failed`)
 console.log('沒有涵蓋到的（要自己講出來）：')
