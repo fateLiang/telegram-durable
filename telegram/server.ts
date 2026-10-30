@@ -950,14 +950,14 @@ bot.command('status', async ctx => {
   await ctx.reply(`Not paired. Send me a message to get a pairing code.`)
 })
 
-// /nudge — 通用「催這個 agent 回報進度」：無參數。owner 對「他正在 DM 的這個 agent」打 /nudge → 該 agent
-// 回報它自己的進度（不廣播、不轉發、不帶 target——1:1，就回報你自己）。通用：任何 agent 用都報自己的進度、
-// 不 hardcode。只配對者可用（handleInbound 內含 gate；非配對→回 pairing 提示）。
+// /nudge — 通用「要這個 agent 完整列出目前所有任務」：無參數。owner 對「他正在 DM 的這個 agent」打 /nudge →
+// 該 agent 逐筆列出自己所有任務（進行中／等別人／待辦，帶狀態＋下一步；有任務系統就讀全部，不只一筆）。
+// 不廣播、不轉發、不帶 target——1:1，就報你自己。只配對者可用（handleInbound 內含 gate；非配對→回 pairing 提示）。
 bot.command('nudge', async ctx => {
   if (ctx.chat?.type !== 'private') return
   await handleInbound(
     ctx,
-    '[/nudge] 你的 owner 用 /nudge 催你回報進度——簡短說你現在在做什麼、手上的活到哪了。**只回報你自己**（不廣播、不轉給別的 agent）。直接回這裡給 owner。',
+    '[/nudge] 你的 owner 用 /nudge 要你**完整列出目前所有任務**——進行中、等別人、待辦都列，每筆帶狀態＋下一步。有任務系統（如 guanling task_list）就讀出全部、逐筆列，不要只挑一筆、不要只給摘要。**只回報你自己**（不廣播、不轉給別的 agent）。直接回這裡給 owner。',
     undefined,
   )
 })
@@ -1473,7 +1473,7 @@ void (async () => {
               { command: 'start', description: 'Welcome and setup guide' },
               { command: 'help', description: 'What this bot can do' },
               { command: 'status', description: 'Check your pairing status' },
-              { command: 'nudge', description: 'Ask this agent to report its current progress' },
+              { command: 'nudge', description: 'Ask this agent to list all its current tasks' },
             ],
             { scope: { type: 'all_private_chats' } },
           ).catch(() => {})
