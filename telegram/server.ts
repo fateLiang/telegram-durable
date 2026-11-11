@@ -85,20 +85,55 @@ if (!TOKEN) {
 const INBOX_DIR = join(STATE_DIR, 'inbox')
 const PID_FILE = join(STATE_DIR, 'bot.pid')
 
+mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 })
+
+// A headless `claude -p` / `--print` run (backtests, subagents, one-shot scripts) has no human
+// reading Telegram. It must NOT poll: grammy allows exactly one getUpdates consumer per bot token,
+// and the kill-stale logic below means every new poller evicts the live one. A fleet of short-lived
+// -p processes therefore steals the token from the real interactive session over and over → the
+// session sees constant "disconnect" churn (jarvis walk-forward backtests, 2026-11-11). So a headless
+// run skips BOTH the kill-stale handover AND bot.start() (search HEADLESS below); the MCP tool server
+// still runs, so a -p run that legitimately wants to SEND can, it just never grabs the poll slot.
+// Detection: walk the ancestry (same as the logger above) for a `claude … -p|--print` spawner.
+// /proc-only ⇒ non-Linux or a read failure returns false = poll as before (safe default).
+const HEADLESS = (() => {
+  try {
+    let cur = process.ppid
+    for (let i = 0; i < 6 && cur > 1; i++) {
+      // EXACT argv-token match (cmdline is NUL-separated). A space-joined substring regex false-matched
+      // `-p` inside `--dangerously-skip-permissions`, flagging interactive sessions as headless — verified
+      // and rejected. Require BOTH a bare `-p`/`--print` token AND a claude token in the SAME process argv.
+      let args: string[] = []
+      try { args = readFileSync(`/proc/${cur}/cmdline`, 'utf8').split('\0').filter(Boolean) } catch {}
+      const hasPrint = args.includes('-p') || args.includes('--print')
+      const isClaude = args.some(a => /(^|\/)claude$/.test(a) || a === 'claude' || /\/claude\//.test(a))
+      if (hasPrint && isClaude) return true
+      let ppid = 0
+      try { ppid = parseInt((readFileSync(`/proc/${cur}/status`, 'utf8').match(/^PPid:\s*(\d+)/m) || [])[1] || '0') } catch {}
+      cur = ppid
+    }
+  } catch {}
+  return false
+})()
+
 // Telegram allows exactly one getUpdates consumer per token. If a previous
 // session crashed (SIGKILL, terminal closed) its server.ts grandchild can
 // survive as an orphan and hold the slot forever, so every new session sees
-// 409 Conflict. Kill any stale holder before we start polling.
-mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 })
-try {
-  const stale = parseInt(readFileSync(PID_FILE, 'utf8'), 10)
-  if (stale > 1 && stale !== process.pid) {
-    process.kill(stale, 0)
-    process.stderr.write(`telegram channel: replacing stale poller pid=${stale}\n`)
-    process.kill(stale, 'SIGTERM')
-  }
-} catch {}
-writeFileSync(PID_FILE, String(process.pid))
+// 409 Conflict. Kill any stale holder before we start polling. (Not when HEADLESS:
+// a -p run must never evict the live session's poller.)
+if (!HEADLESS) {
+  try {
+    const stale = parseInt(readFileSync(PID_FILE, 'utf8'), 10)
+    if (stale > 1 && stale !== process.pid) {
+      process.kill(stale, 0)
+      process.stderr.write(`telegram channel: replacing stale poller pid=${stale}\n`)
+      process.kill(stale, 'SIGTERM')
+    }
+  } catch {}
+  writeFileSync(PID_FILE, String(process.pid))
+} else {
+  process.stderr.write(`telegram channel: headless (claude -p) — not polling (keeps the bot token with the live session)\n`)
+}
 
 // Last-resort safety net — without these the process dies silently on any
 // unhandled promise rejection. With them it logs and keeps serving tools.
@@ -1461,6 +1496,7 @@ bot.catch(err => {
 // (MCP stdin keeps it running). Outbound tools kept working but the bot was
 // deaf to inbound messages until a full restart.
 void (async () => {
+  if (HEADLESS) return // headless `claude -p` run: never grab the poll slot (see HEADLESS above)
   for (let attempt = 1; ; attempt++) {
     try {
       await bot.start({
