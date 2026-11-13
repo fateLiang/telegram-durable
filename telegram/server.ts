@@ -956,7 +956,9 @@ bot.command('help', async ctx => {
     `Messages you send here route to a paired Claude Code session. ` +
     `Text and photos are forwarded; replies and reactions come back.\n\n` +
     `/start — pairing instructions\n` +
-    `/status — check your pairing state`
+    `/status — check your pairing state\n` +
+    `/nudge — ask this agent to list all its current tasks\n` +
+    `/hurry — urge this agent to get on with its work now (optional note: /hurry <what>)`
   )
 })
 
@@ -993,6 +995,19 @@ bot.command('nudge', async ctx => {
   await handleInbound(
     ctx,
     '[/nudge] 你的 owner 用 /nudge 要你**完整列出目前所有任務**——進行中、等別人、待辦都列，每筆帶狀態＋下一步。有任務系統（如 guanling task_list）就讀出全部、逐筆列，不要只挑一筆、不要只給摘要。**只回報你自己**（不廣播、不轉給別的 agent）。直接回這裡給 owner。',
+    undefined,
+  )
+})
+
+// /hurry — owner 催「趕快做」：注入 session 要這個 agent【現在動手把手上的事推進】，不是列清單（列清單是 /nudge）。
+// 可帶可選說明：`/hurry 先把發版弄完` → 那段話一起傳進去當催的內容。1:1、不廣播。只配對者可用（gate 在 handleInbound）。
+bot.command('hurry', async ctx => {
+  if (ctx.chat?.type !== 'private') return
+  const extra = (ctx.match as string | undefined)?.trim()
+  await handleInbound(
+    ctx,
+    '[/hurry] 你的 owner 在催你了——【現在就動手把手上的事做完】，不是列清單（列清單是 /nudge）、也不是只回「好的我去做」。挑你進行中或最該推進的那一件，立刻執行到一個段落；有阻塞就當場排除，排不掉就講清楚卡在哪、在等誰。做到一個段落就回這裡報進度。' +
+      (extra ? `\n\nowner 特別交代：${extra}` : ''),
     undefined,
   )
 })
@@ -1510,6 +1525,7 @@ void (async () => {
               { command: 'help', description: 'What this bot can do' },
               { command: 'status', description: 'Check your pairing status' },
               { command: 'nudge', description: 'Ask this agent to list all its current tasks' },
+              { command: 'hurry', description: 'Urge this agent to get on with its work now' },
             ],
             { scope: { type: 'all_private_chats' } },
           ).catch(() => {})
