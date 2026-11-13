@@ -958,7 +958,8 @@ bot.command('help', async ctx => {
     `/start — pairing instructions\n` +
     `/status — check your pairing state\n` +
     `/nudge — ask this agent to list all its current tasks\n` +
-    `/hurry — urge this agent to get on with its work now (optional note: /hurry <what>)`
+    `/hurry — urge this agent to get on with its work now (optional note: /hurry <what>)\n` +
+    `/challenge — have this agent adversarially review its current result (optional focus: /challenge <what>)`
   )
 })
 
@@ -1008,6 +1009,19 @@ bot.command('hurry', async ctx => {
     ctx,
     '[/hurry] 你的 owner 在催你了——【現在就動手把手上的事做完】，不是列清單（列清單是 /nudge）、也不是只回「好的我去做」。挑你進行中或最該推進的那一件，立刻執行到一個段落；有阻塞就當場排除，排不掉就講清楚卡在哪、在等誰。做到一個段落就回這裡報進度。' +
       (extra ? `\n\nowner 特別交代：${extra}` : ''),
+    undefined,
+  )
+})
+
+// /challenge — owner 要「對抗審查目前結果」：注入 session 要 agent 攻擊自己當下的結論／產物、找洞，而不是重講或辯護。
+// 可帶可選焦點：`/challenge 這個數字` → 針對那點對抗。1:1、不廣播。只配對者可用（gate 在 handleInbound）。
+bot.command('challenge', async ctx => {
+  if (ctx.chat?.type !== 'private') return
+  const extra = (ctx.match as string | undefined)?.trim()
+  await handleInbound(
+    ctx,
+    '[/challenge] 你的 owner 要你對【目前的結果／結論】做對抗審查：不要辯護、不要重講一遍，主動【攻擊它】——哪個假設沒驗證、哪個「看起來對其實不對」、什麼輸入或情況會讓它垮、有沒有一條還沒跑的查法可能推翻它。找到洞就講清楚，能當場補就補、補不了就標成未證。結論是「其實站不住」也要照實說。' +
+      (extra ? `\n\nowner 指定對抗的點：${extra}` : ''),
     undefined,
   )
 })
@@ -1526,6 +1540,7 @@ void (async () => {
               { command: 'status', description: 'Check your pairing status' },
               { command: 'nudge', description: 'Ask this agent to list all its current tasks' },
               { command: 'hurry', description: 'Urge this agent to get on with its work now' },
+              { command: 'challenge', description: 'Have this agent adversarially review its current result' },
             ],
             { scope: { type: 'all_private_chats' } },
           ).catch(() => {})
