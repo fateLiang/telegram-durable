@@ -950,44 +950,6 @@ bot.command('start', async ctx => {
   )
 })
 
-bot.command('help', async ctx => {
-  if (ctx.chat?.type !== 'private') return
-  await ctx.reply(
-    `Messages you send here route to a paired Claude Code session. ` +
-    `Text and photos are forwarded; replies and reactions come back.\n\n` +
-    `/start — pairing instructions\n` +
-    `/status — check your pairing state\n` +
-    `/nudge — ask this agent to list all its current tasks\n` +
-    `/hurry — urge this agent to get on with its work now (optional note: /hurry <what>)\n` +
-    `/challenge — have this agent adversarially review its current result (optional focus: /challenge <what>)`
-  )
-})
-
-bot.command('status', async ctx => {
-  if (ctx.chat?.type !== 'private') return
-  const from = ctx.from
-  if (!from) return
-  const senderId = String(from.id)
-  const access = loadAccess()
-
-  if (access.allowFrom.includes(senderId)) {
-    const name = from.username ? `@${from.username}` : senderId
-    await ctx.reply(`Paired as ${name}.`)
-    return
-  }
-
-  for (const [code, p] of Object.entries(access.pending)) {
-    if (p.senderId === senderId) {
-      await ctx.reply(
-        `Pending pairing — run in Claude Code:\n\n/telegram-durable:access pair ${code}`
-      )
-      return
-    }
-  }
-
-  await ctx.reply(`Not paired. Send me a message to get a pairing code.`)
-})
-
 // /nudge — 通用「要這個 agent 完整列出目前所有任務」：無參數。owner 對「他正在 DM 的這個 agent」打 /nudge →
 // 該 agent 逐筆列出自己所有任務（進行中／等別人／待辦，帶狀態＋下一步；有任務系統就讀全部，不只一筆）。
 // 不廣播、不轉發、不帶 target——1:1，就報你自己。只配對者可用（handleInbound 內含 gate；非配對→回 pairing 提示）。
@@ -1536,8 +1498,6 @@ void (async () => {
           void bot.api.setMyCommands(
             [
               { command: 'start', description: 'Welcome and setup guide' },
-              { command: 'help', description: 'What this bot can do' },
-              { command: 'status', description: 'Check your pairing status' },
               { command: 'nudge', description: 'Ask this agent to list all its current tasks' },
               { command: 'hurry', description: 'Urge this agent to get on with its work now' },
               { command: 'challenge', description: 'Have this agent adversarially review its current result' },
